@@ -1,0 +1,7 @@
+{
+    "id": "cm93-plugin",
+    "name": "CM93 Charts",
+    "version": "0.1",
+    "apiVersion": 4,
+    "description": "Reads C-Map CM93 v2 vector charts and feeds them through the chart pipeline as if they were ENC cells. GPL-2.0-or-later; CM93 binary decoding is derived from OpenCPN."
+}
