@@ -148,8 +148,23 @@ if(WIN32)
     set(CPACK_PACKAGE_INSTALL_DIRECTORY "HMV Chartplotter")
     set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/COPYING")
 
-    # NSIS specifics: 64-bit Program Files, clean reinstall, no PATH edits, no
-    # app shortcuts (this package ships no exe — it augments the host).
+    # CRITICAL: the plugin shares the host's install *folder* but must NOT share
+    # its Windows uninstall identity, or it will remove the host.
+    #   * Registry key: defaults to CPACK_PACKAGE_INSTALL_DIRECTORY ("HMV
+    #     Chartplotter") — identical to the host's key. With
+    #     ENABLE_UNINSTALL_BEFORE_INSTALL that makes the plugin installer read the
+    #     *host's* UninstallString and run it, uninstalling the host. Give the
+    #     plugin its own key so uninstall-before-install only ever targets a prior
+    #     plugin install (clean upgrade), and it gets its own Add/Remove entry.
+    #   * Uninstaller name: CPack defaults to $INSTDIR\Uninstall.exe, which is the
+    #     host's uninstaller in the shared folder — installing the plugin would
+    #     overwrite it. Use a distinct name so both uninstallers coexist.
+    set(CPACK_PACKAGE_INSTALL_REGISTRY_KEY "HMV Chartplotter CM93 Plugin")
+    set(CPACK_NSIS_UNINSTALL_NAME "Uninstall-CM93-Plugin")
+
+    # NSIS specifics: 64-bit Program Files, clean reinstall of the *plugin* only,
+    # no PATH edits, no app shortcuts (this package ships no exe — it augments the
+    # host).
     set(CPACK_NSIS_DISPLAY_NAME "HMV Chartplotter CM93 Plugin")
     set(CPACK_NSIS_PACKAGE_NAME "HMV Chartplotter CM93 Plugin")
     set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
