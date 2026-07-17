@@ -8,7 +8,8 @@ repository's `src/` directory:
 |---|---|
 | `plugin_factory.hpp` | `IPluginFactory`, `kPluginAbiVersion`, the plugin IID |
 | `plugin_api.hpp` | `IPlugin`, `ICoreApi` (and friends) |
-| `chart_source.hpp` | `IChartSource`, `ChartSourceCell` |
+| `chart_source.hpp` | `IChartSource`, `ChartSourceCell` — what this plugin implements |
+| `raster_chart_source.hpp` | `IRasterChartSource` (the raster twin; unused here) |
 | `chart_loader.hpp` | `Feature`, `Pt`, `BBox`, `FeatureKind` |
 | `projection.hpp` | `proj::lonToX` / `latToY` (Mercator) |
 
@@ -33,5 +34,13 @@ the host's plugin API changes:
   this plugin's version accordingly.
 
 Source of truth (host repo, at the time of vendoring):
-`<host-repo>/src/{plugin_factory,plugin_api,chart_source,chart_loader,projection}.hpp`
-— plugin ABI **v4**.
+`<host-repo>/src/{plugin_factory,plugin_api,raster_chart_source,chart_source,chart_loader,projection}.hpp`
+— plugin ABI **v5**, vendored from host commit `8c46b2d` ("add raster charts to
+plugin API").
+
+> **v4 → v5 note.** v5 added `registerRasterChartSource`/`unregisterRasterChartSource`
+> to `ICoreApi` *above* `dialogParent()`, which moves `dialogParent()`'s vtable
+> slot. A v4 build of this plugin calling `dialogParent()` would land on the wrong
+> function, so re-vendoring these headers **and** bumping `apiVersion` in
+> `src/cm93_plugin.json` is mandatory, not cosmetic. The loader's version check is
+> what turns that into a clean "plugin rejected" instead of a crash.
