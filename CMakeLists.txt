@@ -94,3 +94,96 @@ if(BUILD_CM93_TESTS)
         "${CHARTPLOTTER_SDK_DIR}")
     target_link_libraries(test_cm93 PRIVATE Qt6::Core)
 endif()
+
+# ---- Packaging: Windows installer (CPack + NSIS) ----------------------------
+#
+# Wraps the plugin's two runtime files into a single NSIS installer .exe that
+# drops them into an *existing* host install (the same layout the host's own
+# installer produces), mirroring how the host application project packages
+# itself:
+#
+#   $PROGRAMFILES64\HMV Chartplotter\plugins\chartplotter_cm93_plugin.dll
+#   $PROGRAMFILES64\HMV Chartplotter\Qt6Concurrent.dll
+#
+# Only Qt6Concurrent.dll is bundled: the host is a Qt app and already ships
+# Qt6Core/Gui/Widgets next to its exe, but not Concurrent (its own QtConcurrent
+# use is header-only, so windeployqt never copied it) — that is the one Qt DLL
+# the plugin adds to the host's import surface. $INSTDIR matches the host's
+# CPACK_PACKAGE_INSTALL_DIRECTORY ("HMV Chartplotter"), so a default host install
+# receives the files in place.
+#
+# Usage — build Release first, then run cpack from the build dir:
+#
+#   cmake --build --preset vs2022-release
+#   cpack --config build/vs2022/CPackConfig.cmake -C Release -G NSIS
+#
+# Requires NSIS (makensis) on PATH:  https://nsis.sourceforge.io/Download
+# `cmake --install build/vs2022 --config Release --prefix <dir>` stages the same
+# two-file tree without NSIS, handy for verifying the payload.
+if(WIN32)
+    # The loadable module (a MODULE library) is a LIBRARY artifact on Windows;
+    # name RUNTIME too so this is correct regardless of CMake's classification.
+    install(TARGETS cm93_plugin
+            LIBRARY DESTINATION "plugins"
+            RUNTIME DESTINATION "plugins"
+            CONFIGURATIONS Release)
+
+    # The one Qt DLL the host lacks. install(FILES) accepts a generator
+    # expression for the resolved DLL path.
+    install(FILES "$<TARGET_FILE:Qt6::Concurrent>"
+            DESTINATION "."
+            CONFIGURATIONS Release)
+
+    set(CPACK_GENERATOR "NSIS")
+    # Keep the installer + CPack scratch dir inside the build tree.
+    set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}/installer")
+    set(CPACK_PACKAGE_NAME            "HMV Chartplotter CM93 Plugin")
+    set(CPACK_PACKAGE_VENDOR          "net.holybee")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "CM93 v2 chart-source plugin for HMV Chartplotter")
+    set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+    set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+    set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+    set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+    # Install into the host's folder so the plugin lands next to hmvchartplotter.exe.
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY "HMV Chartplotter")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/COPYING")
+
+    # NSIS specifics: 64-bit Program Files, clean reinstall, no PATH edits, no
+    # app shortcuts (this package ships no exe — it augments the host).
+    set(CPACK_NSIS_DISPLAY_NAME "HMV Chartplotter CM93 Plugin")
+    set(CPACK_NSIS_PACKAGE_NAME "HMV Chartplotter CM93 Plugin")
+    set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_NSIS_MODIFY_PATH OFF)
+
+    include(CPack)
+
+    # ---- Auto-build the NSIS installer as part of a Release build ------------
+    #
+    # Folds `cpack --config .../CPackConfig.cmake -C Release -G NSIS` into the
+    # normal build, exactly as the host project does. The `installer` target is
+    # in ALL but only packages on a Release build (pack_release.cmake guards on
+    # $<CONFIG>, since the install payload is Release-only) and depends on
+    # cm93_plugin so the DLL exists first.
+    #
+    # Gated to MULTI-CONFIG generators (Visual Studio / MSVC). A single-config
+    # build — notably the Ninja/MinGW CI job — sets no CMAKE_CONFIGURATION_TYPES,
+    # so the target is NOT created there, keeping CI from invoking cpack/NSIS
+    # (no makensis on that runner). Turn off with -DCM93_BUILD_INSTALLER=OFF.
+    option(CM93_BUILD_INSTALLER
+        "Auto-build the NSIS installer during a multi-config Release build" ON)
+    if(CM93_BUILD_INSTALLER AND CMAKE_CONFIGURATION_TYPES)
+        add_custom_target(installer ALL
+            COMMAND ${CMAKE_COMMAND}
+                    -DCFG=$<CONFIG>
+                    -DCPACK_CMD=${CMAKE_CPACK_COMMAND}
+                    -DCPACK_CONFIG=${CMAKE_BINARY_DIR}/CPackConfig.cmake
+                    -DBIN_DIR=${CMAKE_BINARY_DIR}
+                    -P ${CMAKE_SOURCE_DIR}/cmake/pack_release.cmake
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            COMMENT "Packaging NSIS installer (Release only)"
+            VERBATIM
+        )
+        add_dependencies(installer cm93_plugin)
+    endif()
+endif()

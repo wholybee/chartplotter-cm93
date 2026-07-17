@@ -51,6 +51,30 @@ cmake --build --preset vs2022-release
 
 Then point the app at a CM93 dataset root (the folder containing `CM93OBJ.DIC`).
 
+### Windows installer (NSIS)
+
+Like the host application, a multi-config MSVC Release build automatically
+produces an NSIS installer (`build/vs2022/installer/HMV Chartplotter CM93
+Plugin-<version>-win64.exe`) — no separate command needed. It installs the two
+runtime files into an existing host install under `$PROGRAMFILES64\HMV
+Chartplotter`:
+
+- `plugins\chartplotter_cm93_plugin.dll`
+- `Qt6Concurrent.dll` (next to `hmvchartplotter.exe`)
+
+so the layout matches what the host's own installer produces. Install the host
+first, then run this installer to add CM93 support. It requires
+[NSIS](https://nsis.sourceforge.io/Download) (`makensis`, found via PATH or the
+registry) at build time; disable the auto-step with `-DCM93_BUILD_INSTALLER=OFF`,
+or build it by hand:
+
+```sh
+cpack --config build/vs2022/CPackConfig.cmake -C Release -G NSIS
+```
+
+The step is gated to multi-config (Visual Studio) generators, so the single-config
+Ninja/MinGW CI build never invokes it.
+
 ## Smoke test
 
 A GUI-free decoder check (built by default, `-DBUILD_CM93_TESTS=OFF` to skip):
